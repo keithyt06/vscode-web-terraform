@@ -38,13 +38,19 @@ Deploy VSCode Web (code-server) on AWS with Terraform. This project creates a se
 - AWS CLI configured
 - VPC with private subnets (with NAT Gateway for outbound internet)
 
+## Technical Details
+
+- **OS**: Amazon Linux 2023
+- **code-server**: v4.96.2 (installed via RPM)
+- **Instance replacement**: Changing `vscode_password` triggers instance replacement (user_data only runs on first boot)
+
 ## Quick Start
 
 ### 1. Clone and Configure
 
 ```bash
 # Clone the repository
-git clone https://github.com/YOUR_USERNAME/vscode-web-terraform.git
+git clone https://github.com/keithyt06/vscode-web-terraform.git
 cd vscode-web-terraform
 
 # Copy example configuration
