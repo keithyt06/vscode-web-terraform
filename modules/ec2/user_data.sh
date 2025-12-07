@@ -19,11 +19,11 @@ echo "[2/6] Installing dependencies..."
 dnf install -y wget git
 
 # Install code-server via RPM (most reliable for Amazon Linux 2023)
-echo "[3/6] Installing code-server v${CODE_SERVER_VERSION} via RPM..."
+echo "[3/6] Installing code-server v$${CODE_SERVER_VERSION} via RPM..."
 cd /tmp
-wget -q "https://github.com/coder/code-server/releases/download/v${CODE_SERVER_VERSION}/code-server-${CODE_SERVER_VERSION}-amd64.rpm"
-rpm -i "code-server-${CODE_SERVER_VERSION}-amd64.rpm"
-rm -f "code-server-${CODE_SERVER_VERSION}-amd64.rpm"
+wget -q "https://github.com/coder/code-server/releases/download/v$${CODE_SERVER_VERSION}/code-server-$${CODE_SERVER_VERSION}-amd64.rpm"
+rpm -i "code-server-$${CODE_SERVER_VERSION}-amd64.rpm"
+rm -f "code-server-$${CODE_SERVER_VERSION}-amd64.rpm"
 
 # Verify installation
 if ! command -v code-server &> /dev/null; then
@@ -37,19 +37,19 @@ echo "[4/6] Configuring code-server..."
 mkdir -p /home/ec2-user/.config/code-server
 
 # Create configuration file
-cat > /home/ec2-user/.config/code-server/config.yaml << 'EOF'
+cat > /home/ec2-user/.config/code-server/config.yaml << 'CONFIGEOF'
 bind-addr: 0.0.0.0:${vscode_port}
 auth: password
 password: ${vscode_password}
 cert: false
-EOF
+CONFIGEOF
 
 # Set ownership
 chown -R ec2-user:ec2-user /home/ec2-user/.config
 
 # Create systemd service
 echo "[5/6] Creating systemd service..."
-cat > /etc/systemd/system/code-server.service << 'EOF'
+cat > /etc/systemd/system/code-server.service << SERVICEEOF
 [Unit]
 Description=code-server
 After=network.target
@@ -65,7 +65,7 @@ RestartSec=10
 
 [Install]
 WantedBy=multi-user.target
-EOF
+SERVICEEOF
 
 # Start service
 echo "[6/6] Starting code-server service..."
