@@ -1,0 +1,76 @@
+#--------------------------------------------------------------
+# VSCode Web Terraform Configuration Template
+# Copy this file to envs/<environment>/terraform.tfvars and customize
+#--------------------------------------------------------------
+
+#--------------------------------------------------------------
+# General Configuration
+#--------------------------------------------------------------
+aws_region   = "ap-northeast-1"    # AWS Region
+environment  = "dev"               # Environment name (dev, staging, prod)
+project_name = "vscode-web"        # Project name for resource naming
+
+#--------------------------------------------------------------
+# Network Configuration
+#--------------------------------------------------------------
+vpc_id = "vpc-xxxxxxxxxxxxxxxxx"   # Your VPC ID
+
+# Public subnets (optional, for reference)
+public_subnet_ids = [
+  "subnet-xxxxxxxxxxxxxxxxx",
+  "subnet-xxxxxxxxxxxxxxxxx",
+  "subnet-xxxxxxxxxxxxxxxxx"
+]
+
+# Private subnets (required - EC2 and ALB will be deployed here)
+private_subnet_ids = [
+  "subnet-xxxxxxxxxxxxxxxxx",
+  "subnet-xxxxxxxxxxxxxxxxx",
+  "subnet-xxxxxxxxxxxxxxxxx"
+]
+
+# Additional CIDR blocks allowed to access (optional)
+# allowed_cidr_blocks = ["10.0.0.0/8"]
+
+#--------------------------------------------------------------
+# EC2 Configuration
+#--------------------------------------------------------------
+instance_type    = "t3.medium"     # Instance type (g6.xlarge for GPU)
+root_volume_size = 100             # Root volume size in GB
+root_volume_type = "gp3"           # Volume type (gp3, gp2, io1, io2)
+
+# SSH Key (optional - uncomment if you need SSH access)
+# key_name = "your-key-name"
+
+#--------------------------------------------------------------
+# VSCode Web Configuration
+#--------------------------------------------------------------
+# IMPORTANT: Set password via environment variable for security:
+#   export TF_VAR_vscode_password="your-secure-password"
+#
+# Or use a .auto.tfvars file (add to .gitignore):
+#   vscode_password = "your-secure-password"
+
+vscode_port = 8080                 # VSCode Web server port
+
+#--------------------------------------------------------------
+# CloudFront Configuration
+#--------------------------------------------------------------
+enable_cloudfront      = true      # Enable CloudFront for HTTPS access
+cloudfront_price_class = "PriceClass_200"  # PriceClass_100, PriceClass_200, PriceClass_All
+
+#--------------------------------------------------------------
+# ALB Configuration
+#--------------------------------------------------------------
+alb_internal      = true           # true for internal ALB
+health_check_path = "/"            # Health check path
+
+#--------------------------------------------------------------
+# Tags
+#--------------------------------------------------------------
+tags = {
+  Owner       = "your-name"
+  Environment = "dev"
+  Project     = "vscode-web"
+  ManagedBy   = "terraform"
+}
