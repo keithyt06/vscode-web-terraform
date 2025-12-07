@@ -3,45 +3,53 @@ set -e
 
 # Logging
 exec > >(tee /var/log/user-data.log) 2>&1
+echo "=========================================="
 echo "Starting user_data script at $(date)"
+echo "=========================================="
+
+# Variables
+CODE_SERVER_VERSION="4.96.2"
 
 # Update system
-echo "Updating system packages..."
+echo "[1/6] Updating system packages..."
 dnf update -y
 
-# Install dependencies
-# Note: Amazon Linux 2023 has curl-minimal by default, use --allowerasing to replace with full curl
-echo "Installing dependencies..."
+# Install dependencies (wget and git only, curl-minimal is sufficient)
+echo "[2/6] Installing dependencies..."
 dnf install -y wget git
-dnf install -y --allowerasing curl || echo "curl already available via curl-minimal"
 
-# Install code-server
-echo "Installing code-server..."
-curl -fsSL https://code-server.dev/install.sh | sh
+# Install code-server via RPM (most reliable for Amazon Linux 2023)
+echo "[3/6] Installing code-server v${CODE_SERVER_VERSION} via RPM..."
+cd /tmp
+wget -q "https://github.com/coder/code-server/releases/download/v${CODE_SERVER_VERSION}/code-server-${CODE_SERVER_VERSION}-amd64.rpm"
+rpm -i "code-server-${CODE_SERVER_VERSION}-amd64.rpm"
+rm -f "code-server-${CODE_SERVER_VERSION}-amd64.rpm"
 
-# Verify code-server installed
+# Verify installation
 if ! command -v code-server &> /dev/null; then
     echo "ERROR: code-server installation failed!"
     exit 1
 fi
-echo "code-server installed successfully: $(code-server --version)"
+echo "code-server installed: $(code-server --version)"
 
-# Create code-server config directory
+# Create config directory
+echo "[4/6] Configuring code-server..."
 mkdir -p /home/ec2-user/.config/code-server
 
-# Create code-server configuration
-cat > /home/ec2-user/.config/code-server/config.yaml << 'CONFIGEOF'
+# Create configuration file
+cat > /home/ec2-user/.config/code-server/config.yaml << 'EOF'
 bind-addr: 0.0.0.0:${vscode_port}
 auth: password
 password: ${vscode_password}
 cert: false
-CONFIGEOF
+EOF
 
-# Set correct ownership
+# Set ownership
 chown -R ec2-user:ec2-user /home/ec2-user/.config
 
-# Create systemd service for code-server
-cat > /etc/systemd/system/code-server.service << 'SERVICEEOF'
+# Create systemd service
+echo "[5/6] Creating systemd service..."
+cat > /etc/systemd/system/code-server.service << 'EOF'
 [Unit]
 Description=code-server
 After=network.target
@@ -57,23 +65,26 @@ RestartSec=10
 
 [Install]
 WantedBy=multi-user.target
-SERVICEEOF
+EOF
 
-# Enable and start code-server
-echo "Starting code-server service..."
+# Start service
+echo "[6/6] Starting code-server service..."
 systemctl daemon-reload
 systemctl enable code-server
 systemctl start code-server
 
-# Wait and verify code-server is running
-sleep 5
+# Verify service
+sleep 3
 if systemctl is-active --quiet code-server; then
-    echo "code-server is running successfully!"
+    echo "=========================================="
+    echo "SUCCESS: code-server is running!"
+    echo "Port: ${vscode_port}"
+    echo "=========================================="
     systemctl status code-server --no-pager
 else
     echo "ERROR: code-server failed to start!"
-    journalctl -u code-server --no-pager -n 50
+    journalctl -u code-server --no-pager -n 30
     exit 1
 fi
 
-echo "User data script completed successfully at $(date)"
+echo "User data completed at $(date)"
