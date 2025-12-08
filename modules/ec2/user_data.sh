@@ -146,10 +146,10 @@ echo "nginx status: $(systemctl is-active nginx)"
 echo "code-server status: $(systemctl is-active code-server@root)"
 
 # Test local connectivity
-if curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:80 | grep -q "302"; then
+if curl -s -o /dev/null -w "%%{http_code}" http://127.0.0.1:80 | grep -q "302"; then
     echo "Local health check: PASSED"
 else
-    echo "Local health check: Response code $(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:80)"
+    echo "Local health check: Response code $(curl -s -o /dev/null -w "%%{http_code}" http://127.0.0.1:80)"
 fi
 
 echo "=== VSCode Web setup completed ==="
