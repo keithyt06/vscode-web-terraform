@@ -1,73 +1,66 @@
-data "aws_vpc" "selected" {
-  id = var.vpc_id
+# CloudFront managed prefix list data source
+data "aws_ec2_managed_prefix_list" "cloudfront" {
+  name = "com.amazonaws.global.cloudfront.origin-facing"
 }
 
-# Security Group for EC2 Instance
-resource "aws_security_group" "ec2" {
-  name        = "${var.name_prefix}-ec2-sg"
-  description = "Security group for VSCode Web EC2 instance"
-  vpc_id      = var.vpc_id
-
-  # Allow inbound from ALB on VSCode port
-  ingress {
-    description     = "Allow traffic from ALB"
-    from_port       = var.vscode_port
-    to_port         = var.vscode_port
-    protocol        = "tcp"
-    security_groups = [aws_security_group.alb.id]
-  }
-
-  # Allow all outbound traffic
-  egress {
-    description = "Allow all outbound traffic"
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  tags = merge(var.tags, {
-    Name = "${var.name_prefix}-ec2-sg"
-  })
-}
-
-# Security Group for Internal ALB
+# ALB Security Group - Only allows CloudFront traffic
 resource "aws_security_group" "alb" {
-  name        = "${var.name_prefix}-alb-sg"
-  description = "Security group for internal ALB"
+  name        = "${var.name}-alb-sg"
+  description = "Security group for ALB - CloudFront only"
   vpc_id      = var.vpc_id
 
-  # Allow inbound HTTP from VPC CIDR
-  ingress {
-    description = "Allow HTTP from VPC"
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = [data.aws_vpc.selected.cidr_block]
-  }
+  tags = merge(var.tags, {
+    Name = "${var.name}-alb-sg"
+  })
+}
 
-  # Allow inbound HTTP from additional CIDR blocks (if specified)
-  dynamic "ingress" {
-    for_each = length(var.allowed_cidr_blocks) > 0 ? [1] : []
-    content {
-      description = "Allow HTTP from allowed CIDR blocks"
-      from_port   = 80
-      to_port     = 80
-      protocol    = "tcp"
-      cidr_blocks = var.allowed_cidr_blocks
-    }
-  }
+resource "aws_security_group_rule" "alb_ingress_cloudfront" {
+  type              = "ingress"
+  from_port         = 80
+  to_port           = 80
+  protocol          = "tcp"
+  prefix_list_ids   = [data.aws_ec2_managed_prefix_list.cloudfront.id]
+  security_group_id = aws_security_group.alb.id
+  description       = "Allow HTTP from CloudFront"
+}
 
-  # Allow all outbound traffic
-  egress {
-    description = "Allow all outbound traffic"
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
+resource "aws_security_group_rule" "alb_egress" {
+  type              = "egress"
+  from_port         = 0
+  to_port           = 0
+  protocol          = "-1"
+  cidr_blocks       = ["0.0.0.0/0"]
+  security_group_id = aws_security_group.alb.id
+  description       = "Allow all outbound traffic"
+}
+
+# EC2 Security Group - Only allows traffic from ALB
+resource "aws_security_group" "ec2" {
+  name        = "${var.name}-ec2-sg"
+  description = "Security group for VSCode EC2 instance"
+  vpc_id      = var.vpc_id
 
   tags = merge(var.tags, {
-    Name = "${var.name_prefix}-alb-sg"
+    Name = "${var.name}-ec2-sg"
   })
+}
+
+resource "aws_security_group_rule" "ec2_ingress_http" {
+  type                     = "ingress"
+  from_port                = 80
+  to_port                  = 80
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.alb.id
+  security_group_id        = aws_security_group.ec2.id
+  description              = "Allow HTTP from ALB"
+}
+
+resource "aws_security_group_rule" "ec2_egress" {
+  type              = "egress"
+  from_port         = 0
+  to_port           = 0
+  protocol          = "-1"
+  cidr_blocks       = ["0.0.0.0/0"]
+  security_group_id = aws_security_group.ec2.id
+  description       = "Allow all outbound traffic"
 }

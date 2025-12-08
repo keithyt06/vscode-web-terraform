@@ -1,26 +1,27 @@
-variable "name_prefix" {
-  description = "Prefix for resource names"
+variable "name" {
+  description = "Name prefix for CloudFront resources"
   type        = string
 }
 
 variable "alb_dns_name" {
-  description = "ALB DNS name"
-  type        = string
-}
-
-variable "alb_arn" {
-  description = "ALB ARN"
+  description = "DNS name of the ALB origin"
   type        = string
 }
 
 variable "price_class" {
   description = "CloudFront price class"
   type        = string
-  default     = "PriceClass_200"
+  default     = "PriceClass_All"
+}
+
+variable "enabled" {
+  description = "Whether the distribution is enabled"
+  type        = bool
+  default     = true
 }
 
 variable "tags" {
-  description = "Tags for resources"
+  description = "Tags to apply to resources"
   type        = map(string)
   default     = {}
 }

@@ -1,66 +1,70 @@
-provider "aws" {
-  region = var.aws_region
+terraform {
+  required_version = ">= 1.0.0"
+
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = ">= 5.0.0"
+    }
+  }
 }
 
-locals {
-  name_prefix = "${var.project_name}-${var.environment}"
-  common_tags = merge(var.tags, {
-    Project     = var.project_name
-    Environment = var.environment
-    ManagedBy   = "terraform"
-  })
+provider "aws" {
+  region = var.region
+
+  default_tags {
+    tags = var.tags
+  }
 }
 
 # Security Groups
 module "security_groups" {
   source = "./modules/security-groups"
 
-  name_prefix         = local.name_prefix
-  vpc_id              = var.vpc_id
-  allowed_cidr_blocks = var.allowed_cidr_blocks
-  vscode_port         = var.vscode_port
-  tags                = local.common_tags
+  name        = var.name
+  vpc_id      = var.vpc_id
+  vscode_port = var.vscode_port
+  tags        = var.tags
 }
 
-# EC2 Instance with VSCode Web
+# EC2 Instance
 module "ec2" {
   source = "./modules/ec2"
 
-  name_prefix        = local.name_prefix
-  instance_type      = var.instance_type
-  subnet_id          = var.private_subnet_ids[0]
-  security_group_ids = [module.security_groups.ec2_security_group_id]
-  root_volume_size   = var.root_volume_size
-  root_volume_type   = var.root_volume_type
-  vscode_password    = var.vscode_password
-  vscode_port        = var.vscode_port
-  key_name           = var.key_name
-  tags               = local.common_tags
+  name                    = var.name
+  instance_type           = var.instance_type
+  vpc_id                  = var.vpc_id
+  subnet_id               = var.private_subnet_id
+  security_group_ids      = [module.security_groups.ec2_security_group_id]
+  root_volume_size        = var.root_volume_size
+  data_volume_size        = var.data_volume_size
+  existing_data_volume_id = var.existing_data_volume_id
+  key_name                = var.key_name
+  iam_instance_profile    = var.iam_instance_profile
+  vscode_password         = var.vscode_password
+  vscode_port             = var.vscode_port
+  tags                    = var.tags
 }
 
-# Internal Application Load Balancer
+# Application Load Balancer
 module "alb" {
   source = "./modules/alb"
 
-  name_prefix        = local.name_prefix
+  name               = var.name
   vpc_id             = var.vpc_id
-  subnet_ids         = var.private_subnet_ids
+  public_subnet_ids  = var.public_subnet_ids
   security_group_ids = [module.security_groups.alb_security_group_id]
   target_instance_id = module.ec2.instance_id
-  internal           = var.alb_internal
-  health_check_path  = var.health_check_path
-  target_port        = var.vscode_port
-  tags               = local.common_tags
+  target_port        = 80
+  tags               = var.tags
 }
 
-# CloudFront Distribution (optional)
+# CloudFront Distribution
 module "cloudfront" {
-  count  = var.enable_cloudfront ? 1 : 0
   source = "./modules/cloudfront"
 
-  name_prefix  = local.name_prefix
+  name         = var.name
   alb_dns_name = module.alb.alb_dns_name
-  alb_arn      = module.alb.alb_arn
   price_class  = var.cloudfront_price_class
-  tags         = local.common_tags
+  tags         = var.tags
 }

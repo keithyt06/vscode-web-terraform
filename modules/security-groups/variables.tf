@@ -1,5 +1,5 @@
-variable "name_prefix" {
-  description = "Prefix for resource names"
+variable "name" {
+  description = "Name prefix for security groups"
   type        = string
 }
 
@@ -8,20 +8,14 @@ variable "vpc_id" {
   type        = string
 }
 
-variable "allowed_cidr_blocks" {
-  description = "CIDR blocks allowed to access the ALB"
-  type        = list(string)
-  default     = []
-}
-
 variable "vscode_port" {
-  description = "Port for VSCode Web server"
+  description = "Port for VSCode Web UI"
   type        = number
   default     = 8080
 }
 
 variable "tags" {
-  description = "Tags for resources"
+  description = "Tags to apply to resources"
   type        = map(string)
   default     = {}
 }

@@ -1,37 +1,23 @@
 # Terraform
-.terraform/
-.terraform.lock.hcl
 *.tfstate
 *.tfstate.*
-*.tfstate.backup
+*.tfvars
+!example.tfvars
+.terraform/
+.terraform.lock.hcl
 crash.log
-crash.*.log
-override.tf
-override.tf.json
-*_override.tf
-*_override.tf.json
-.terraformrc
-terraform.rc
-
-# Sensitive files - NEVER commit these
-*.auto.tfvars
-secrets.tfvars
-**/secrets.tfvars
+*.log
 
 # IDE
 .idea/
 .vscode/
 *.swp
 *.swo
-*~
 
 # OS
 .DS_Store
 Thumbs.db
 
-# Logs
-*.log
-
-# Local development
-.env
-.envrc
+# Sensitive files
+*.pem
+*.key

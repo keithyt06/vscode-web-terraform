@@ -1,5 +1,5 @@
-variable "name_prefix" {
-  description = "Prefix for resource names"
+variable "name" {
+  description = "Name prefix for ALB resources"
   type        = string
 }
 
@@ -8,13 +8,13 @@ variable "vpc_id" {
   type        = string
 }
 
-variable "subnet_ids" {
-  description = "List of subnet IDs for ALB"
+variable "public_subnet_ids" {
+  description = "List of public subnet IDs for ALB"
   type        = list(string)
 }
 
 variable "security_group_ids" {
-  description = "List of security group IDs"
+  description = "List of security group IDs for ALB"
   type        = list(string)
 }
 
@@ -23,10 +23,10 @@ variable "target_instance_id" {
   type        = string
 }
 
-variable "internal" {
-  description = "Whether ALB is internal"
-  type        = bool
-  default     = true
+variable "target_port" {
+  description = "Port on which the target is listening"
+  type        = number
+  default     = 80
 }
 
 variable "health_check_path" {
@@ -35,14 +35,8 @@ variable "health_check_path" {
   default     = "/"
 }
 
-variable "target_port" {
-  description = "Target port for the application"
-  type        = number
-  default     = 8080
-}
-
 variable "tags" {
-  description = "Tags for resources"
+  description = "Tags to apply to resources"
   type        = map(string)
   default     = {}
 }

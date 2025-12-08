@@ -9,83 +9,69 @@ Deploy VSCode Web (code-server) on AWS with Terraform. This project creates a se
 │                         CloudFront                               │
 │                    (HTTPS Termination)                           │
 └─────────────────────────────┬───────────────────────────────────┘
-                              │
+                              │ (Only CloudFront IPs allowed)
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                    Internal ALB (VPC Origin)                     │
-│                         (HTTP:80)                                │
+│                    Public ALB                                    │
+│              (HTTP:80, idle_timeout=3600s)                       │
+│                  Public Subnets                                  │
 └─────────────────────────────┬───────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                      EC2 Instance                                │
-│                   (code-server:8080)                             │
+│              Ubuntu 24.04 LTS + code-server + nginx              │
+│              200GB System + 2TB Data Volume (GP3)                │
 │                    Private Subnet                                │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
 ## Features
 
-- **Secure Access**: CloudFront provides HTTPS access with no public IP exposure
-- **Flexible Configuration**: Customizable instance type, storage, and networking
-- **GPU Support**: Use GPU instances (e.g., g6.xlarge) for ML/AI workloads
-- **SSM Access**: Connect to instance via AWS Systems Manager (no SSH required)
+- **Secure Access**: CloudFront provides HTTPS, ALB only accepts CloudFront traffic (via AWS managed prefix list)
+- **Auto Start**: code-server and nginx start automatically on boot with health checks
+- **WebSocket Support**: ALB idle timeout set to 3600s for stable WebSocket connections
+- **Flexible Storage**: Configurable root volume (default 200GB) and data volume (default 2TB GP3)
+- **Bring Your Own Volume**: Option to attach existing EBS volume instead of creating new one
+- **GPU Support**: Default g6.xlarge instance for ML/AI workloads
+- **Ubuntu 24.04 LTS**: Latest long-term support Ubuntu with cloud-init optimizations
 - **Reusable**: Easy to deploy across multiple environments/regions
 
 ## Prerequisites
 
 - Terraform >= 1.0
 - AWS CLI configured
-- VPC with private subnets (with NAT Gateway for outbound internet)
-
-## Technical Details
-
-- **OS**: Amazon Linux 2023
-- **code-server**: v4.96.2 (installed via RPM)
-- **Instance replacement**: Changing `vscode_password` triggers instance replacement (user_data only runs on first boot)
+- VPC with public subnets (for ALB) and private subnets (for EC2)
+- NAT Gateway for private subnet outbound internet access
+- g6.xlarge requires availability in selected AZ (check ap-northeast-1a or ap-northeast-1c)
 
 ## Quick Start
 
-### 1. Clone and Configure
+### 1. Configure Environment
 
 ```bash
-# Clone the repository
-git clone https://github.com/keithyt06/vscode-web-terraform.git
-cd vscode-web-terraform
+cd envs/dev
 
-# Copy example configuration
-mkdir -p envs/my-env
-cp terraform.tfvars.example envs/my-env/terraform.tfvars
-
-# Edit configuration
-vi envs/my-env/terraform.tfvars
+# Edit configuration - MUST change vscode_password!
+vi terraform.tfvars
 ```
 
-### 2. Set Password
+### 2. Deploy
 
 ```bash
-# Set VSCode Web password (required)
-export TF_VAR_vscode_password="your-secure-password"
-```
-
-### 3. Deploy
-
-```bash
-cd envs/my-env
-
 # Initialize Terraform
 terraform init
 
 # Review changes
-terraform plan
+terraform plan -var-file=terraform.tfvars
 
 # Deploy
-terraform apply
+terraform apply -var-file=terraform.tfvars
 ```
 
-### 4. Access
+### 3. Access VSCode Web
 
-After deployment, Terraform outputs the VSCode Web URL:
+After deployment (~15 minutes for CloudFront), access via:
 
 ```bash
 terraform output vscode_web_url
@@ -98,24 +84,35 @@ terraform output vscode_web_url
 
 | Variable | Description |
 |----------|-------------|
-| `aws_region` | AWS region (e.g., ap-northeast-1) |
+| `region` | AWS region (e.g., ap-northeast-1) |
 | `vpc_id` | VPC ID |
-| `private_subnet_ids` | List of private subnet IDs |
+| `public_subnet_ids` | List of public subnet IDs for ALB |
+| `private_subnet_id` | Private subnet ID for EC2 instance |
 | `vscode_password` | Password for VSCode Web UI |
 
 ### Optional Variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `instance_type` | t3.medium | EC2 instance type |
-| `root_volume_size` | 100 | Root volume size (GB) |
-| `root_volume_type` | gp3 | Volume type |
-| `vscode_port` | 8080 | VSCode Web port |
-| `enable_cloudfront` | true | Enable CloudFront |
-| `cloudfront_price_class` | PriceClass_200 | CloudFront price class |
-| `alb_internal` | true | Internal ALB |
+| `name` | vscode-web | Name prefix for resources |
+| `instance_type` | g6.xlarge | EC2 instance type |
+| `root_volume_size` | 200 | Root volume size (GB) |
+| `data_volume_size` | 2000 | Data volume size (GB), set 0 to disable |
+| `existing_data_volume_id` | "" | Existing EBS volume ID to attach |
+| `key_name` | "" | SSH key pair name (optional) |
+| `iam_instance_profile` | "" | IAM instance profile (optional) |
+| `vscode_port` | 8080 | VSCode Web internal port |
+| `cloudfront_price_class` | PriceClass_All | CloudFront price class |
 
-See `terraform.tfvars.example` for full configuration options.
+### Using Existing Data Volume
+
+To attach an existing EBS volume instead of creating a new one:
+
+```hcl
+# In terraform.tfvars
+data_volume_size = 0  # Disable new volume creation
+existing_data_volume_id = "vol-0123456789abcdef0"
+```
 
 ## Project Structure
 
@@ -124,60 +121,121 @@ vscode-web-terraform/
 ├── main.tf                    # Root module
 ├── variables.tf               # Input variables
 ├── outputs.tf                 # Output values
-├── versions.tf                # Provider versions
-├── terraform.tfvars.example   # Configuration template
 ├── modules/
-│   ├── ec2/                   # EC2 instance module
+│   ├── ec2/                   # EC2 instance + EBS volumes
+│   │   ├── main.tf
+│   │   ├── variables.tf
+│   │   ├── outputs.tf
+│   │   └── user_data.sh       # Auto-start script
 │   ├── alb/                   # Application Load Balancer
 │   ├── cloudfront/            # CloudFront distribution
-│   └── security-groups/       # Security groups
+│   └── security-groups/       # Security groups (CloudFront-only ALB)
 └── envs/
-    └── tokyo/                 # Example environment
+    └── dev/                   # Development environment
         ├── main.tf
         ├── variables.tf
-        ├── terraform.tfvars
-        └── backend.tf
+        ├── outputs.tf
+        ├── backend.tf         # Backend config (optional)
+        └── terraform.tfvars   # Environment configuration
 ```
 
 ## Multi-Environment Setup
 
-Create new environments by copying the template:
+Create new environments by copying dev:
 
 ```bash
 # Create new environment
-mkdir -p envs/production
-cp envs/tokyo/main.tf envs/production/
-cp envs/tokyo/variables.tf envs/production/
-cp envs/tokyo/versions.tf envs/production/
-cp terraform.tfvars.example envs/production/terraform.tfvars
+cp -r envs/dev envs/production
 
-# Configure for production
+# Update configuration
 vi envs/production/terraform.tfvars
+
+# Deploy
+cd envs/production
+terraform init
+terraform apply -var-file=terraform.tfvars
 ```
 
 ## Security
 
-- EC2 instance has no public IP
-- ALB is internal only
-- CloudFront provides HTTPS termination
-- Security groups restrict access to VPC CIDR
-- SSM provides secure shell access without SSH
+- EC2 instance deployed in private subnet (no public IP)
+- ALB security group only allows traffic from CloudFront (AWS managed prefix list)
+- EC2 security group only allows traffic from ALB
+- CloudFront provides HTTPS termination with TLSv1.2
+- All EBS volumes encrypted by default
 
-## Connect via SSM
+## Data Volume
+
+The data volume is mounted at `/data` and persists across instance restarts:
+
+- Auto-formatted with ext4 on first boot
+- Added to /etc/fstab for auto-mount
+- Use `existing_data_volume_id` to preserve data across deployments
+
+## Outputs
+
+| Output | Description |
+|--------|-------------|
+| `instance_id` | EC2 instance ID |
+| `instance_private_ip` | EC2 private IP |
+| `data_volume_id` | Data volume ID (for backup) |
+| `alb_dns_name` | ALB DNS name |
+| `cloudfront_distribution_id` | CloudFront distribution ID |
+| `cloudfront_domain_name` | CloudFront domain |
+| `vscode_web_url` | Full HTTPS URL to access VSCode Web |
+
+## Troubleshooting
+
+### Instance Creation Takes Too Long
+
+If EC2 instance creation hangs for more than 10 minutes:
+- g6.xlarge may not be available in the selected AZ
+- Try changing `private_subnet_id` to a subnet in ap-northeast-1a or ap-northeast-1c
+- Check AWS Service Health Dashboard for capacity issues
+
+### VSCode Web Shows nginx Default Page
+
+If you see the nginx welcome page instead of code-server:
+1. SSH/SSM into the instance
+2. Check user-data log: `cat /var/log/user-data.log`
+3. Check code-server status: `systemctl status code-server@root`
+4. Check nginx config: `cat /etc/nginx/sites-enabled/code-server`
+
+### WebSocket Connection Issues
+
+If code-server disconnects frequently:
+- ALB idle_timeout is set to 3600s (1 hour)
+- CloudFront origin_read_timeout is set to 60s
+- Check browser console for WebSocket errors
+
+### Check Instance Logs via SSM
 
 ```bash
 # Get instance ID
-INSTANCE_ID=$(terraform output -raw ec2_instance_id)
+INSTANCE_ID=$(terraform output -raw instance_id)
 
 # Connect via SSM
 aws ssm start-session --target $INSTANCE_ID
+
+# View user-data log
+sudo cat /var/log/user-data.log
+
+# Check service status
+sudo systemctl status code-server@root
+sudo systemctl status nginx
 ```
 
 ## Cleanup
 
 ```bash
-terraform destroy
+terraform destroy -var-file=terraform.tfvars
 ```
+
+## Known Limitations
+
+- CloudFront distribution takes ~15 minutes to deploy
+- g6.xlarge instances may have limited availability in some AZs
+- Data volume must be in the same AZ as the instance
 
 ## License
 
